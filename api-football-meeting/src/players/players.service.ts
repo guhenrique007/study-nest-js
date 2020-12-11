@@ -1,5 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreatePlayerDto } from './dtos/create-player.dto'
+import { UpdatePlayerDto } from './dtos/update-player-dto'
 import { Player } from './interfaces/player.interface'
 import {v4 as uuidv4} from 'uuid'
 import { InjectModel } from '@nestjs/mongoose';
@@ -11,16 +12,27 @@ export class PlayersService {
 
     private readonly logger = new Logger(PlayersService.name)
 
-    async createUpdatePlayer(createPlayerDto: CreatePlayerDto): Promise<void>{
+    async createPlayer(createPlayerDto: CreatePlayerDto): Promise<Player>{
         const { email } = createPlayerDto
         const playerFound = await this.playerModel.findOne({email}).exec();
 
         if(playerFound){
-            await this.update(createPlayerDto);
-        } else {
-            await this.create(createPlayerDto);
+            throw new BadRequestException(`Email ${email} already exists`)
         }
 
+        const playerCreated = new this.playerModel(createPlayerDto)
+        return await playerCreated.save()
+    }
+
+    async updatePlayer(_id: string, updatePlayerDto: UpdatePlayerDto): Promise<void>{
+        const playerFound = await this.playerModel.findOne({_id}).exec();
+
+        if(!playerFound){
+            throw new NotFoundException(`Player with id ${_id} not found`)
+        }
+        
+        await this.playerModel.findOneAndUpdate({_id}, 
+            {$set: updatePlayerDto}).exec()
     }
 
     async showPlayers(): Promise<Player[]> {
@@ -35,18 +47,13 @@ export class PlayersService {
         return playerFound
     }
 
-    async deletePlayer(email): Promise<any>{
-        return await this.playerModel.remove({email}).exec();
-        
-    }
+    async deletePlayer(_id): Promise<any>{
+        const playerFound = await this.playerModel.findOne({_id}).exec();
 
-    private async create(createPlayerDto: CreatePlayerDto): Promise<Player>{
-        const playerCreated = new this.playerModel(createPlayerDto)
-        return await playerCreated.save();
-    }
+        if(!playerFound) {
+            throw new NotFoundException(`Player with id ${_id} not found`)
+        }
 
-    private async update(createPlayerDto: CreatePlayerDto): Promise <Player> {
-        return await this.playerModel.findOneAndUpdate({email: createPlayerDto.email}, 
-            {$set: createPlayerDto}).exec()
+        return await this.playerModel.deleteOne({_id}).exec(); 
     }
 }
